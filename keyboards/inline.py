@@ -1,121 +1,123 @@
+from typing import List, Dict, Optional, Iterable
+
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-from typing import List, Dict, Optional
+
+from utils import GENRES
+
+# Callback data formatlari (Telegram cheklovi: 64 bayt):
+#   movie:<kod>             — kino kartochkasi
+#   fav:<kod> / wl:<kod>    — sevimlilar / keyin ko'raman
+#   list:<tur>:<sahifa>     — tur: new | top | fav | wl | srch
+#   genre:<kalit>:<sahifa>  — janr bo'yicha ro'yxat
+#   gsub:<kalit>            — janrga obuna bo'lish/bekor qilish
+#   menu | genres | search | random | noop
 
 
-def get_movie_keyboard(
-    code: str,
-    user_id: int,
-    is_favorite: bool = False,
-    is_watch_later: bool = False
-) -> InlineKeyboardMarkup:
-    """Kino kartochkasi uchun inline tugmalar"""
-    buttons = []
-    
-    # Sevimlilar tugmasi
+def get_movie_keyboard(code: str, is_favorite: bool = False, is_watch_later: bool = False) -> InlineKeyboardMarkup:
+    """Kino kartochkasi uchun tugmalar"""
     fav_text = "❤️ Sevimlilardan olib tashlash" if is_favorite else "🤍 Sevimlilarga qo'shish"
-    buttons.append([InlineKeyboardButton(text=fav_text, callback_data=f"fav_{code}")])
-    
-    # Keyin ko'raman tugmasi
     watch_text = "🗑 Keyin ko'ramandan olib tashlash" if is_watch_later else "⏰ Keyin ko'raman"
-    buttons.append([InlineKeyboardButton(text=watch_text, callback_data=f"watch_{code}")])
-    
-    return InlineKeyboardMarkup(inline_keyboard=buttons)
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=fav_text, callback_data=f"fav:{code}")],
+        [InlineKeyboardButton(text=watch_text, callback_data=f"wl:{code}")],
+        [InlineKeyboardButton(text="📤 Do'stga ulashish", switch_inline_query=str(code))],
+    ])
 
 
-def get_search_results_keyboard(
-    movies: List[Dict],
-    page: int = 0,
-    total_pages: int = 0,
-    query: str = "",
-    filter_type: str = "search"
-) -> InlineKeyboardMarkup:
-    """Qidiruv natijalari uchun inline tugmalar (sahifalash bilan)"""
-    buttons = []
-    
-    for movie in movies:
-        movie_title = movie['title'][:30] + "..." if len(movie['title']) > 30 else movie['title']
-        buttons.append([
-            InlineKeyboardButton(
-                text=f"{movie['code']}. {movie_title}",
-                callback_data=f"movie_{movie['code']}"
-            )
-        ])
-    
-    # Sahifalash tugmalari
-    nav_buttons = []
+def _nav_row(prefix: str, page: int, pages: int) -> List[InlineKeyboardButton]:
+    row = []
     if page > 0:
-        nav_buttons.append(
-            InlineKeyboardButton(text="⬅️ Oldingi", callback_data=f"{filter_type}_{query}_{page-1}")
-        )
-    
-    nav_buttons.append(
-        InlineKeyboardButton(text=f"{page + 1}/{total_pages + 1}", callback_data="page")
-    )
-    
-    if page < total_pages:
-        nav_buttons.append(
-            InlineKeyboardButton(text="Keyingi ➡️", callback_data=f"{filter_type}_{query}_{page+1}")
-        )
-    
-    if nav_buttons:
-        buttons.append(nav_buttons)
-    
+        row.append(InlineKeyboardButton(text="⬅️ Oldingi", callback_data=f"{prefix}:{page - 1}"))
+    row.append(InlineKeyboardButton(text=f"{page + 1}/{pages}", callback_data="noop"))
+    if page < pages - 1:
+        row.append(InlineKeyboardButton(text="Keyingi ➡️", callback_data=f"{prefix}:{page + 1}"))
+    return row
+
+
+def get_movie_list_keyboard(
+    movies: List[Dict],
+    prefix: str,
+    page: int = 0,
+    pages: int = 1,
+    extra_rows: Optional[Iterable[List[InlineKeyboardButton]]] = None,
+    back: str = "menu",
+) -> InlineKeyboardMarkup:
+    """Kinolar ro'yxati: har bir kino tugma, sahifalash va orqaga"""
+    buttons = []
+    for movie in movies:
+        title = movie["title"]
+        if len(title) > 30:
+            title = title[:30] + "…"
+        buttons.append([InlineKeyboardButton(text=f"{movie['code']}. {title}", callback_data=f"movie:{movie['code']}")])
+
+    if pages > 1:
+        buttons.append(_nav_row(prefix, page, pages))
+    if extra_rows:
+        buttons.extend(extra_rows)
+    buttons.append([InlineKeyboardButton(text="🔙 Orqaga", callback_data=back)])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
 def get_main_menu_keyboard() -> InlineKeyboardMarkup:
-    """Asosiy menyu"""
-    buttons = [
-        [InlineKeyboardButton(text="🔍 Qidirish", callback_data="search")],
-        [InlineKeyboardButton(text="🆕 Yangilar", callback_data="new")],
-        [InlineKeyboardButton(text="🏆 Top 10", callback_data="top")],
-        [InlineKeyboardButton(text="❤️ Sevimlilar", callback_data="favorites")],
-        [InlineKeyboardButton(text="⏰ Keyin ko'raman", callback_data="watch_later")],
-    ]
-    return InlineKeyboardMarkup(inline_keyboard=buttons)
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="🔍 Qidirish", callback_data="search"),
+            InlineKeyboardButton(text="🎲 Tasodifiy", callback_data="random"),
+        ],
+        [
+            InlineKeyboardButton(text="🆕 Yangilar", callback_data="list:new:0"),
+            InlineKeyboardButton(text="🏆 Top", callback_data="list:top:0"),
+        ],
+        [InlineKeyboardButton(text="🎭 Janrlar", callback_data="genres")],
+        [
+            InlineKeyboardButton(text="❤️ Sevimlilar", callback_data="list:fav:0"),
+            InlineKeyboardButton(text="⏰ Keyin ko'raman", callback_data="list:wl:0"),
+        ],
+    ])
 
 
 def get_category_keyboard() -> InlineKeyboardMarkup:
-    """Kategoriya filtr tugmalari"""
-    buttons = [
-        [
-            InlineKeyboardButton(text="🎭 Drama", callback_data="genre_Drama"),
-            InlineKeyboardButton(text="💥 Action", callback_data="genre_Action")
-        ],
-        [
-            InlineKeyboardButton(text="😂 Comedy", callback_data="genre_Comedy"),
-            InlineKeyboardButton(text="😱 Horror", callback_data="genre_Horror")
-        ],
-        [
-            InlineKeyboardButton(text="🔮 Fantasy", callback_data="genre_Fantasy"),
-            InlineKeyboardButton(text="💕 Romance", callback_data="genre_Romance")
-        ],
-        [
-            InlineKeyboardButton(text="🔍 Science Fiction", callback_data="genre_Sci-Fi"),
-            InlineKeyboardButton(text="🎬 Thriller", callback_data="genre_Thriller")
-        ],
-        [InlineKeyboardButton(text="🔙 Orqaga", callback_data="back")],
-    ]
+    buttons = []
+    for i in range(0, len(GENRES), 2):
+        buttons.append([
+            InlineKeyboardButton(text=label, callback_data=f"genre:{key}:0")
+            for key, label, _ in GENRES[i:i + 2]
+        ])
+    buttons.append([InlineKeyboardButton(text="🔙 Orqaga", callback_data="menu")])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
+def genre_subscribe_row(key: str, subscribed: bool) -> List[InlineKeyboardButton]:
+    text = "🔕 Obunani bekor qilish" if subscribed else "🔔 Yangi kinolardan xabardor bo'lish"
+    return [InlineKeyboardButton(text=text, callback_data=f"gsub:{key}")]
+
+
 def get_admin_keyboard() -> InlineKeyboardMarkup:
-    """Admin paneli uchun tugmalar"""
-    buttons = [
+    return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="📊 Statistika", callback_data="admin_stats")],
         [InlineKeyboardButton(text="📋 Barcha kinolar", callback_data="admin_list")],
         [InlineKeyboardButton(text="➕ Kino qo'shish", callback_data="admin_add")],
         [InlineKeyboardButton(text="📢 Ommaviy xabar", callback_data="admin_broadcast")],
         [InlineKeyboardButton(text="⚙️ Sozlamalar", callback_data="admin_settings")],
-    ]
-    return InlineKeyboardMarkup(inline_keyboard=buttons)
+    ])
+
+
+def get_admin_back_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🔙 Admin panel", callback_data="admin_back")],
+    ])
 
 
 def get_settings_keyboard(force_subscription: bool = False) -> InlineKeyboardMarkup:
-    """Sozlamalar tugmalari"""
     sub_text = "✅ Majburiy obuna: YOQILGAN" if force_subscription else "❌ Majburiy obuna: O'CHIRILGAN"
-    buttons = [
+    return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text=sub_text, callback_data="toggle_subscription")],
         [InlineKeyboardButton(text="🔙 Orqaga", callback_data="admin_back")],
-    ]
-    return InlineKeyboardMarkup(inline_keyboard=buttons)
+    ])
+
+
+def get_broadcast_confirm_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text="✅ Yuborish", callback_data="bc_send"),
+        InlineKeyboardButton(text="❌ Bekor qilish", callback_data="bc_cancel"),
+    ]])

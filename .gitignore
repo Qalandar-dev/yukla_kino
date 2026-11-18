@@ -1,0 +1,11 @@
+# Python
+__pycache__/
+*.pyc
+venv/
+.venv/
+
+# Maxfiy sozlamalar
+.env
+
+# Ma'lumotlar bazasi zaxiralari
+*_backup_*.db
