@@ -1,75 +1,108 @@
-from aiogram import Router, types, F
-from aiogram.types import Message
+import asyncio
+import logging
+import re
+from html import escape
+
+from aiogram import Router, Bot
+from aiogram.exceptions import TelegramForbiddenError, TelegramRetryAfter
+from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
+
+from config import Config
 from database import Database
 from services.tmdb import tmdb_service
-import re
-import logging
 
 logger = logging.getLogger(__name__)
 router = Router()
 
 
+def is_private_channel(message: Message) -> bool:
+    """Faqat .env dagi PRIVATE_CHANNEL_ID kanalidan kelgan postlar qabul qilinadi"""
+    if not Config.PRIVATE_CHANNEL_ID:
+        logger.warning("PRIVATE_CHANNEL_ID sozlanmagan — kanal postlari e'tiborsiz qoldiriladi")
+        return False
+    return str(message.chat.id) == str(Config.PRIVATE_CHANNEL_ID).strip()
+
+
+def extract_media(message: Message):
+    """(file_id, file_type) yoki None"""
+    if message.video:
+        return message.video.file_id, "video"
+    if message.animation:
+        return message.animation.file_id, "animation"
+    if message.document:
+        return message.document.file_id, "document"
+    return None
+
+
 @router.channel_post()
 @router.edited_channel_post()
-async def handle_channel_post(message: Message, db: Database):
-    """Kanaldan kinolarni avtomatik o'qish"""
-    print("\n" + "=" * 50)
-    print(f"📩 KANAL POSTI KELDI! Chat ID: {message.chat.id}")
-    print(f"📌 Content Type: {message.content_type}")
-
-    # Video bor-yo'qligini tekshirish
-    video = message.video or message.animation or message.document
-    if not video:
-        print("❌ XATOLIK: Xabarda video yoki media fayl topilmadi!")
-        print("=" * 50 + "\n")
+async def handle_channel_post(message: Message, db: Database, bot: Bot):
+    """Maxfiy kanaldan kinolarni avtomatik saqlash"""
+    if not is_private_channel(message):
         return
 
-    # Caption bor-yo'qligini tekshirish
-    caption = message.caption.strip() if message.caption else ""
-    print(f"📝 Post Izohi (Caption):\n{caption}")
-
-    if not caption:
-        print("❌ XATOLIK: Videoga izoh (caption) yozilmagan!")
-        print("=" * 50 + "\n")
+    media = extract_media(message)
+    if not media:
         return
+    file_id, file_type = media
 
+    caption = (message.caption or "").strip()
     lines = [line.strip() for line in caption.split("\n") if line.strip()]
+    if not lines:
+        logger.warning(f"Kanal posti {message.message_id}: caption yo'q, o'tkazib yuborildi")
+        return
 
-    # Koddagi raqamni izlash
-    code_match = re.search(r'\d+', lines[0])
+    code_match = re.search(r"\d+", lines[0])
     if not code_match:
-        print(f"❌ XATOLIK: Birinchi qatordan '{lines[0]}' raqamli kod topilmadi!")
-        print("=" * 50 + "\n")
+        logger.warning(f"Kanal posti {message.message_id}: birinchi qatorda kod topilmadi: {lines[0]!r}")
         return
 
     code = code_match.group()
     title = lines[1] if len(lines) > 1 else "Noma'lum kino"
-    file_id = video.file_id
+    is_new = not await db.code_exists(code)
 
-    # Bazaga saqlash
-    if await db.code_exists(code):
-        await db.delete_movie(code)
+    tmdb_info = await tmdb_service.get_movie_info_by_name(title) if title != "Noma'lum kino" else {}
+    if not tmdb_info:
+        logger.info(f"TMDB ma'lumoti topilmadi: {title}")
 
-    # TMDB dan ma'lumot olish
-    tmdb_info = await tmdb_service.get_movie_info_by_name(title)
-    
-    if tmdb_info:
-        print(f"🎬 TMDB dan ma'lumot olindi: {title}")
-        await db.add_movie(
-            code=code,
-            file_id=file_id,
-            title=title,
-            poster_url=tmdb_info.get("poster_url"),
-            year=tmdb_info.get("year"),
-            genre=tmdb_info.get("genre"),
-            duration=tmdb_info.get("duration"),
-            description=tmdb_info.get("description"),
-            country=tmdb_info.get("country"),
-            language=tmdb_info.get("language")
-        )
-    else:
-        print(f"⚠️ TMDB dan ma'lumot topilmadi, asosiy ma'lumotlar saqlanmoqda")
-        await db.add_movie(code, file_id, title)
+    saved = await db.add_movie(code=code, file_id=file_id, title=title, file_type=file_type, **tmdb_info)
+    if not saved:
+        return
+    logger.info(f"Kino saqlandi: {code} | {title} ({'yangi' if is_new else 'yangilandi'})")
 
-    print(f"✅ MUVAFFAQIYATLI SAQLANDI! -> Kod: {code} | Nomi: {title}")
-    print("=" * 50 + "\n")
+    if is_new and tmdb_info.get("genre"):
+        asyncio.create_task(notify_subscribers(bot, db, code))
+
+
+async def notify_subscribers(bot: Bot, db: Database, code: str):
+    """Janrga obuna bo'lganlarga yangi kino haqida xabar yuborish"""
+    movie = await db.get_movie_by_code(code)
+    if not movie:
+        return
+    user_ids = await db.get_subscribers_for_genres(movie["genre"])
+    if not user_ids:
+        return
+
+    text = (
+        "🔔 <b>Yangi kino qo'shildi!</b>\n\n"
+        f"🎬 {escape(movie['title'])} ({movie.get('year') or '—'})\n"
+        f"🎭 {escape(movie['genre'])}\n"
+        f"🔑 Kod: <code>{escape(code)}</code>"
+    )
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="▶️ Ko'rish", callback_data=f"movie:{code}")]
+    ])
+
+    sent = 0
+    for user_id in user_ids:
+        try:
+            await bot.send_message(user_id, text, reply_markup=keyboard)
+            sent += 1
+        except TelegramRetryAfter as e:
+            await asyncio.sleep(e.retry_after)
+        except TelegramForbiddenError:
+            await db.set_user_blocked(user_id)
+        except Exception as e:
+            logger.error(f"Obunachiga yuborilmadi ({user_id}): {e}")
+        await asyncio.sleep(0.05)
+    logger.info(f"Yangi kino {code} haqida {sent} ta obunachiga xabar yuborildi")

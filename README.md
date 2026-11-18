@@ -1,186 +1,135 @@
 # 🎬 Telegram Kino Bot
 
-Zamonaviy, qulay va kengaytiriladigan Telegram kino boti. Kod bo'yicha va nom bo'yicha qidirish, kategoriyalar, inline rejim va boshqa ko'plab funksiyalar.
+Kod va nom bo'yicha qidiruv, janrlar, sevimlilar, inline rejim va admin paneliga ega Telegram kino boti (aiogram 3).
 
-## ✨ Xususiyatlar
+## ✨ Imkoniyatlar
 
 ### Foydalanuvchilar uchun
-- **Kod bo'yicha qidirish**: Kod yuboring, kino yuboriladi
-- **Nom bo'yicha qidirish**: Kino nomini yozing, natijalar chiqadi (FTS5 fuzzy search)
-- **Sahifalash**: Natijalar inline tugmalar bilan, 5 tadan, "Oldingi/Keyingi" bilan
-- **Kategoriyalar**: Janr, yil, davlat bo'yicha filtr
-- **Yangilar va Top 10**: Eng so'nggi va eng ko'p ko'rilgan kinolar
-- **Inline rejim**: Istalgan chatda @botnomi kino nomi yozing
-- **Kino kartochkasi**: Poster, nom, yil, janr, davomiyligi, mazmun
-- **Sevimlilar**: Sevimli kinolarni saqlash
-- **Keyin ko'raman**: Keyin ko'rishni rejalashtirish
-- **Ko'rishlar hisobi**: Har bir kinoni ko'rishlar soni
+- **Kod bo'yicha qidirish** — kodni yuboring, kino fayli kartochkasi bilan keladi
+- **Nom bo'yicha qidirish** — nomning bir qismini yozish kifoya (`spider` → *Spider-Man*), FTS5 + prefiks qidiruv
+- **Sahifalash** — barcha ro'yxatlarda 5 tadan, «Oldingi / Keyingi» tugmalari bilan
+- **🆕 Yangilar** va **🏆 Top** — eng so'nggi va eng ko'p ko'rilgan kinolar
+- **🎭 Janrlar** — 12 ta janr bo'yicha ko'rish
+- **🔔 Janrga obuna** — tanlangan janrda yangi kino qo'shilganda bot xabar beradi
+- **🎲 Tasodifiy kino** — menyudan yoki `/random`
+- **❤️ Sevimlilar** va **⏰ Keyin ko'raman**
+- **📤 Ulashish** — kartochkadagi tugma orqali do'stga yuborish; xabarda botga to'g'ridan-to'g'ri havola bo'ladi (`t.me/bot?start=<kod>`)
+- **Inline rejim** — istalgan chatda `@botnomi kino nomi`
 
 ### Adminlar uchun
-- **Kino qo'shish**: Kanalga yuboring, avtomatik saqlanadi
-- **TMDB integratsiya**: Kino ma'lumotlari avtomatik to'ldiriladi
-- **Kino tahrirlash/o'chirish**: Kod bo'yicha boshqarish
-- **Statistika**: Foydalanuvchilar, yangi foydalanuvchilar, eng ko'p ko'rilgan kinolar
-- **Ommaviy xabar**: Barcha foydalanuvchilarga xabar yuborish (flood limit bilan)
-- **Majburiy kanal**: Kanal obuna tekshiruvi (yoqish/o'chirish mumkin)
-
-### Texnik xususiyatlar
-- **aiogram 3**: Zamonaviy async kutubxona
-- **aiosqlite**: Async SQLite ma'lumotlar bazasi
-- **FTS5**: Full-text search qidiruv
-- **Modular strukturasi**: handlers, keyboards, services, middlewares
-- **FSM (Finite State Machine)**: Admin panel uchun holatlar
-- **TMDB API**: Kino ma'lumotlari uchun
-- **.env konfiguratsiya**: Barcha sozlamalar faylda
+- **Avtomatik qo'shish** — maxfiy kanalga video/hujjat yuboring, bot o'zi saqlaydi
+- **TMDB integratsiya** — yil, janr, davomiylik, davlat va mazmun avtomatik to'ldiriladi
+- **Tahrirlash** — `/edit <kod> <maydon> <qiymat>`
+- **O'chirish** — `/delete <kod>`
+- **TMDB dan yangilash** — `/tmdb <kod>`
+- **Statistika** — foydalanuvchilar, bloklaganlar, ko'rishlar, top kinolar
+- **Ommaviy xabar** — matn, rasm, video va h.k.; yuborishdan oldin tasdiqlash; botni bloklaganlar avtomatik belgilanadi
+- **Majburiy obuna** — admin paneldan yoqish/o'chirish (holat bazada saqlanadi), foydalanuvchiga «Kanalga o'tish» va «✅ Obuna bo'ldim» tugmalari chiqadi
 
 ## 📋 Talablar
 
-- Python 3.8+
-- Telegram bot tokeni (@BotFather dan oling)
-- Maxfiy Telegram kanal ID (kinolar uchun)
-- TMDB API kaliti (ixtiyoriy, kino ma'lumotlari uchun)
+- Python 3.9+
+- Telegram bot tokeni ([@BotFather](https://t.me/BotFather))
+- Maxfiy Telegram kanal (bot unda **admin** bo'lishi kerak)
+- TMDB API kaliti — ixtiyoriy ([themoviedb.org](https://www.themoviedb.org/settings/api))
 
 ## 🚀 O'rnatish
 
-1. **Repozitoriyani kloning**
 ```bash
-git clone <repository-url>
+git clone https://github.com/qalandar-dev/yukla_kino.git
 cd yukla_kino
-```
 
-2. **Virtual muhit yaratish**
-```bash
 python -m venv venv
-venv\Scripts\activate  # Windows
-# source venv/bin/activate  # Linux/Mac
-```
+venv\Scripts\activate          # Windows
+# source venv/bin/activate     # Linux / macOS
 
-3. **Qaramliklarni o'rnatish**
-```bash
 pip install -r requirements.txt
+cp .env.example .env           # keyin .env ni to'ldiring
+python main.py
 ```
 
-4. **Konfiguratsiya**
-```bash
-cp .env.example .env
-```
+Bot birinchi ishga tushganda bazani o'zi yaratadi. Eski versiyadagi bazangiz bo'lsa, u ham avtomatik yangilanadi (ma'lumotlar o'chmaydi). Xohlasangiz, avval zaxira nusxa olib yangilash uchun:
 
-`.env` faylini oching va quyidagilarni to'ldiring:
-```
-BOT_TOKEN=your_bot_token_here
-ADMIN_IDS=7770204757
-PRIVATE_CHANNEL_ID=-1001234567890
-TMDB_API_KEY=your_tmdb_api_key_here
-FORCE_CHANNEL_ID=-1001234567890
-FORCE_CHANNEL_CHECK=false
-```
-
-5. **Ma'lumotlar bazasini migratsiya qilish** (agar eski bazangiz bo'lsa)
 ```bash
 python migrate_db.py
 ```
 
-6. **Botni ishga tushirish**
-```bash
-python main.py
-```
+## ⚙️ `.env` parametrlari
+
+| Parametr | Majburiy | Tavsif |
+|---|---|---|
+| `BOT_TOKEN` | ✅ | Bot tokeni |
+| `ADMIN_IDS` | ✅ | Admin Telegram ID lari, vergul bilan: `111,222` |
+| `PRIVATE_CHANNEL_ID` | ✅ | Kinolar yuklanadigan maxfiy kanal ID si (`-100...`). Boshqa kanallardan kelgan postlar e'tiborsiz qoldiriladi |
+| `TMDB_API_KEY` | — | TMDB API kaliti |
+| `FORCE_CHANNEL_ID` | — | Majburiy obuna kanali ID si |
+| `FORCE_CHANNEL_LINK` | — | Shu kanal havolasi. Bo'sh bo'lsa, bot o'zi aniqlaydi |
+| `FORCE_CHANNEL_CHECK` | — | `true` / `false` — boshlang'ich holat (keyin admin paneldan o'zgartiriladi) |
+| `DB_FILE` | — | Baza fayli (standart: `movies.db`) |
 
 ## 🎮 Foydalanish
 
-### Foydalanuvchilar uchun
+### Kino qo'shish
+Maxfiy kanalga video (yoki hujjat) yuboring, caption:
 
-1. **Botni boshlash**: `/start`
-2. **Kod yuborish**: Masalan, `123`
-3. **Nom bo'yicha qidirish**: Kino nomini yozing
-4. **Inline rejim**: Istalgan chatda `@botnomi kino nomi`
-5. **Menyu**: Asosiy menyu orqali qidirish, yangilar, top 10, sevimlilar
+```
+123
+Kino nomi
+```
 
-### Adminlar uchun
+1-qatordagi raqam — kod, 2-qator — nom. Shu kod bilan qayta yuborilsa, kino yangilanadi (ko'rishlar soni saqlanadi).
 
-1. **Admin paneli**: `/admin`
-2. **Kino qo'shish**: 
-   - Kanalga kinoni yuboring (caption: 1-qator - kod, 2-qator - nom)
-   - Yoki admin panel orqali kino nomini yozing (TMDB dan ma'lumot olinadi)
-3. **Kino o'chirish**: `/delete <kod>`
-4. **Barcha kinolar**: `/list`
-5. **Ommaviy xabar**: Admin panel orqali
-6. **Statistika**: Admin panel orqali
+### Komandalar
+
+| Komanda | Kim uchun | Vazifasi |
+|---|---|---|
+| `/start` | hamma | Bosh menyu |
+| `/help` | hamma | Yordam |
+| `/random` | hamma | Tasodifiy kino |
+| `/admin` | admin | Admin paneli |
+| `/list` | admin | Barcha kinolar |
+| `/delete <kod>` | admin | Kinoni o'chirish |
+| `/edit <kod> <maydon> <qiymat>` | admin | Tahrirlash. Maydonlar: `title`, `year`, `genre`, `duration`, `description`, `country`, `language`, `poster_url`. Qiymatni tozalash: `-` |
+| `/tmdb <kod>` | admin | Ma'lumotlarni TMDB dan qayta olish |
+| `/cancel` | admin | Joriy amalni bekor qilish |
+
+Misol: `/edit 12 year 2019`, `/edit 12 genre Drama, Romance`
 
 ## 📁 Fayl tuzilishi
 
 ```
 yukla_kino/
-├── main.py                 # Asosiy bot fayli
-├── config.py               # Konfiguratsiya
-├── database.py             # Async SQLite ma'lumotlar bazasi
-├── migrate_db.py           # Migratsiya skripti
-├── requirements.txt        # Python qaramliklari
-├── .env.example            # Konfiguratsiya namunasi
-├── .env                    # Konfiguratsiya (yaratilishi kerak)
-├── movies.db               # Ma'lumotlar bazasi (avtomatik yaratiladi)
-├── handlers/               # Handlerlar
-│   ├── __init__.py
-│   ├── user.py            # Foydalanuvchi handlerlari
-│   ├── admin.py           # Admin handlerlari
-│   ├── channel.py         # Kanal handleri
-│   └── inline.py          # Inline handler
-├── keyboards/             # Tugmalar
-│   ├── __init__.py
-│   └── inline.py          # Inline tugmalar
-├── services/              # Xizmatlar
-│   ├── __init__.py
-│   └── tmdb.py            # TMDB API service
-└── middlewares/           # Middlewarelar
-    ├── __init__.py
-    ├── db.py              # Database middleware
-    └── channel_check.py   # Kanal tekshiruvi middleware
+├── main.py                 # Ishga tushirish, routerlar
+├── config.py               # .env sozlamalari
+├── database.py             # Async SQLite (aiosqlite) + FTS5
+├── utils.py                # Matn formatlash, kino yuborish, janrlar ro'yxati
+├── migrate_db.py           # Zaxira nusxa bilan bazani yangilash
+├── handlers/
+│   ├── admin.py            # Admin paneli va komandalar
+│   ├── channel.py          # Kanaldan kino qabul qilish, obunachilarga xabar
+│   ├── inline.py           # Inline qidiruv
+│   └── user.py             # Foydalanuvchi menyusi va qidiruv
+├── keyboards/inline.py     # Inline tugmalar
+├── middlewares/
+│   ├── db.py               # Bazani handlerlarga uzatish
+│   └── channel_check.py    # Majburiy obuna tekshiruvi
+└── services/tmdb.py        # TMDB API
 ```
-
-## 🔧 Sozlamalar
-
-### .env fayl parametrlari
-
-- `BOT_TOKEN`: Telegram bot tokeni (majburiy)
-- `ADMIN_IDS`: Admin Telegram IDlari, vergul bilan ajratilgan (majburiy)
-- `PRIVATE_CHANNEL_ID`: Maxfiy kanal ID (kinolar uchun)
-- `TMDB_API_KEY`: TMDB API kaliti (ixtiyoriy, kino ma'lumotlari uchun)
-- `FORCE_CHANNEL_ID`: Majburiy obuna kanal ID (ixtiyoriy)
-- `FORCE_CHANNEL_CHECK`: Majburiy obuna tekshiruvi (true/false, default: false)
-
-## 🔒 Xavfsizlik
-
-- `.env` faylini hech kimga bermang
-- Admin IDlarni to'g'ri kiriting
-- Bot tokenni maxfiy saqlang
-- TMDB API kalitini maxfiy saqlang
 
 ## 🐛 Muammolar
 
-**Bot ishlamayapti:**
-- `.env` fayl to'g'ri yaratilganligini tekshiring
-- Bot token to'g'ri ekanligini tasdiqlang
-- Admin IDlari to'g'ri ekanligini tekshiring
-- Qaramliklarni o'rnatganingizni tekshiring
+**Kanalga yuborilgan kino saqlanmayapti**
+- Bot kanalda admin ekanini tekshiring
+- `PRIVATE_CHANNEL_ID` aynan shu kanal ID si ekanini tekshiring
+- Caption 1-qatorida raqamli kod borligini tekshiring
 
-**Kino yuborilmayapti:**
-- File ID to'g'ri ekanligini tekshiring
-- Kino kanalda mavjudligini tasdiqlang
-- Bot kanalga admin ekanligini tekshiring
+**Majburiy obuna ishlamayapti**
+- Bot `FORCE_CHANNEL_ID` kanalida admin bo'lishi kerak (aks holda tekshiruv o'tkazib yuboriladi va logda xato chiqadi)
 
-**TMDB ishlamayapti:**
-- API kalit to'g'ri ekanligini tekshiring
-- API kalit aktiv ekanligini tasdiqlang
+**Inline rejim ishlamayapti**
+- @BotFather → `/setinline` orqali inline rejimni yoqing
 
-## 📞 Yordam
+## 🔒 Xavfsizlik
 
-Qo'shimcha ma'lumot uchun:
-- `/help` - Yordam
-- `/start` - Boshlash
-
-## 📄 Litsenziya
-
-Bu loyiha ochiq kodli va erkin foydalanish mumkin.
-
-## 🤝 Qo'shgan hissa
-
-Agar loyihaga qo'shmoqchi bo'lsangiz, pull request yuboring.
+- `.env` faylini hech qachon GitHub'ga yuklamang (`.gitignore` da bor)
+- Token oshkor bo'lib qolsa, @BotFather → `/revoke` orqali yangisini oling

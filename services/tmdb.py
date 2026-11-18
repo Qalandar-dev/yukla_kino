@@ -8,90 +8,78 @@ logger = logging.getLogger(__name__)
 
 class TMDBService:
     BASE_URL = "https://api.themoviedb.org/3"
-    
+    TIMEOUT = 10
+
     def __init__(self):
         self.api_key = Config.TMDB_API_KEY
-    
+
+    async def _get(self, path: str, **params) -> Optional[Dict]:
+        if not self.api_key:
+            return None
+        params["api_key"] = self.api_key
+        try:
+            async with httpx.AsyncClient(timeout=self.TIMEOUT) as client:
+                response = await client.get(f"{self.BASE_URL}{path}", params=params)
+                if response.status_code == 200:
+                    return response.json()
+                logger.warning(f"TMDB {path}: HTTP {response.status_code}")
+        except Exception as e:
+            logger.error(f"TMDB request error ({path}): {e}")
+        return None
+
     async def search_movie(self, query: str) -> Optional[Dict]:
-        """Kino nomi bo'yicha qidirish"""
+        """Kino nomi bo'yicha qidirish (birinchi natija)"""
         if not self.api_key:
             logger.warning("TMDB API key not configured")
             return None
-        
-        url = f"{self.BASE_URL}/search/movie"
-        params = {
-            "api_key": self.api_key,
-            "query": query,
-            "language": "uz-UZ"
-        }
-        
-        try:
-            async with httpx.AsyncClient() as client:
-                response = await client.get(url, params=params)
-                if response.status_code == 200:
-                    data = response.json()
-                    if data.get("results"):
-                        return data["results"][0]  # Birinchi natijani qaytarish
-        except Exception as e:
-            logger.error(f"TMDB search error: {e}")
-        
+        data = await self._get("/search/movie", query=query, language="en-US")
+        if data and data.get("results"):
+            return data["results"][0]
         return None
-    
-    async def get_movie_details(self, tmdb_id: int) -> Optional[Dict]:
-        """Kino tafsilotlarini olish"""
-        if not self.api_key:
-            return None
-        
-        url = f"{self.BASE_URL}/movie/{tmdb_id}"
-        params = {
-            "api_key": self.api_key,
-            "language": "uz-UZ"
-        }
-        
-        try:
-            async with httpx.AsyncClient() as client:
-                response = await client.get(url, params=params)
-                if response.status_code == 200:
-                    return response.json()
-        except Exception as e:
-            logger.error(f"TMDB details error: {e}")
-        
-        return None
-    
-    def format_movie_data(self, tmdb_data: Dict) -> Dict:
-        """TMDB ma'lumotlarini biz formatiga o'tkazish"""
-        if not tmdb_data:
+
+    async def get_movie_details(self, tmdb_id: int, language: str = "en-US") -> Optional[Dict]:
+        return await self._get(f"/movie/{tmdb_id}", language=language)
+
+    @staticmethod
+    def format_movie_data(details: Dict, overview_uz: Optional[str] = None) -> Dict:
+        """TMDB ma'lumotlarini bot formatiga o'tkazish.
+
+        Janr va davlat nomlari inglizcha olinadi (janr filtrlari shunga mos),
+        mazmun esa mavjud bo'lsa o'zbekcha.
+        """
+        if not details:
             return {}
-        
-        genres = ", ".join([g["name"] for g in tmdb_data.get("genres", [])])
-        countries = ", ".join([c["name"] for c in tmdb_data.get("production_countries", [])])
-        
+
+        genres = ", ".join(g["name"] for g in details.get("genres", []))
+        countries = ", ".join(c["name"] for c in details.get("production_countries", []))
+        release = details.get("release_date") or ""
+        year = int(release[:4]) if release[:4].isdigit() else None
+        poster = details.get("poster_path")
+
         return {
-            "poster_url": f"https://image.tmdb.org/t/p/w500{tmdb_data.get('poster_path')}" if tmdb_data.get("poster_path") else None,
-            "year": tmdb_data.get("release_date", "")[:4] if tmdb_data.get("release_date") else None,
-            "genre": genres,
-            "duration": tmdb_data.get("runtime"),
-            "description": tmdb_data.get("overview"),
-            "country": countries,
-            "language": tmdb_data.get("original_language")
+            "poster_url": f"https://image.tmdb.org/t/p/w500{poster}" if poster else None,
+            "year": year,
+            "genre": genres or None,
+            "duration": details.get("runtime") or None,
+            "description": overview_uz or details.get("overview") or None,
+            "country": countries or None,
+            "language": details.get("original_language"),
         }
-    
+
     async def get_movie_info_by_name(self, title: str) -> Dict:
         """Kino nomi bo'yicha to'liq ma'lumot olish"""
         search_result = await self.search_movie(title)
-        if not search_result:
+        if not search_result or not search_result.get("id"):
             return {}
-        
-        tmdb_id = search_result.get("id")
-        if not tmdb_id:
-            return {}
-        
-        details = await self.get_movie_details(tmdb_id)
+
+        tmdb_id = search_result["id"]
+        details = await self.get_movie_details(tmdb_id, "en-US")
         if not details:
             return {}
-        
-        return self.format_movie_data(details)
+
+        details_uz = await self.get_movie_details(tmdb_id, "uz-UZ")
+        overview_uz = details_uz.get("overview") if details_uz else None
+        return self.format_movie_data(details, overview_uz)
 
 
-# Global instance
 tmdb_service = TMDBService()
